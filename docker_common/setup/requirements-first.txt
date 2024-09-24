@@ -1,0 +1,10 @@
+#**********************************************************************************************************************#
+#   The python packages in this file will be install fist.                                                             #
+#   And the packages installs one by one.                                                                              #
+#   Order install the requirement files:                                                                               #
+#       1. requirements-first.txt [install the packages one by one]                                                    #                                                                  
+#       2. requirements.txt       [The dependencies automatically resolves and installs for all the packages listed]   #
+#       3. requirements-last.txt  [install the packages one by one]                                                    #
+#                                                                                                                      #
+#**********************************************************************************************************************#
+

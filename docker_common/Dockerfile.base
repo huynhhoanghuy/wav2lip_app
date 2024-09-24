@@ -1,0 +1,137 @@
+ARG distribution=""
+ARG regular_username=admin
+ARG regular_user_uid=1000
+ARG regular_user_gid=1000
+
+# This argument is to ensure install package without prompt
+ARG DEBIAN_FRONTEND=noninteractive
+ARG COMMON_DEPENDENCIES="sudo locales curl wget vim nano zstd unzip yasm checkinstall v4l-utils \
+build-essential git-lfs git cmake pkg-config libusb-1.0-0 g++ freeglut3-dev \
+libx11-dev libxmu-dev libxi-dev libglu1-mesa libglu1-mesa-dev"
+
+
+### JetPack-L4T
+FROM nvcr.io/nvidia/l4t-base:35.3.1 AS admin-l4t-35.3.1-base
+ARG DEBIAN_FRONTEND
+ARG COMMON_DEPENDENCIES
+# ARG CUDA_RUNTIME_PACKAGE="cuda-base-11-4 libcudnn8=8.*.*.*-1+cuda11.4" # Uncomment here if you want to install CUDA runtime packages on base image
+ARG CUDA_RUNTIME_PACKAGE=""
+ARG DEPENDENCIES="${COMMON_DEPENDENCIES} ${CUDA_RUNTIME_PACKAGE}"
+RUN apt-get update -y && apt-get install -y software-properties-common && apt update && \
+    add-apt-repository ppa:deadsnakes/ppa && \
+    apt-get install -y python3.8 python3-pip python3.8-distutils python3.8-dev python3-tk python3.8-tk && \
+    python3.8 -m pip install --no-cache-dir --upgrade pip setuptools
+LABEL BaseImage=nvcr.io/nvidia/l4t-base:35.3.1 
+
+FROM nvcr.io/nvidia/l4t-ml:r35.2.1-py3 AS admin-l4t-35.2.1-ml-base
+ARG DEBIAN_FRONTEND
+ARG COMMON_DEPENDENCIES
+ARG CUDA_RUNTIME_PACKAGE=
+ARG DEPENDENCIES="${COMMON_DEPENDENCIES} ${CUDA_RUNTIME_PACKAGE}"
+# remove OPENCV if require apt upgrade packages
+RUN apt-get purge -y '*opencv*'
+LABEL BaseImage=nvcr.io/nvidia/l4t-ml:r35.2.1-py3
+
+FROM nvcr.io/nvidia/l4t-pytorch:r35.2.1-pth2.0-py3 AS admin-l4t-35.2.1-pytorch-base
+ARG DEBIAN_FRONTEND
+ARG COMMON_DEPENDENCIES
+ARG CUDA_RUNTIME_PACKAGE=
+ARG DEPENDENCIES="${COMMON_DEPENDENCIES} ${CUDA_RUNTIME_PACKAGE}"
+LABEL BaseImage=nvcr.io/nvidia/l4t-pytorch:r35.2.1-pth2.0-py3
+
+FROM l4t-tensorflow:r35.3.1-tf2.11-py3 AS admin-l4t-35.3.1-tensorflow-base
+ARG DEBIAN_FRONTEND
+ARG COMMON_DEPENDENCIES
+ARG CUDA_RUNTIME_PACKAGE=
+ARG DEPENDENCIES="${COMMON_DEPENDENCIES} ${CUDA_RUNTIME_PACKAGE}"
+LABEL BaseImage=l4t-tensorflow:r35.3.1-tf2.11-py3
+
+
+### Ubuntu x86_64
+FROM nvcr.io/nvidia/cuda:11.7.1-base-ubuntu20.04 AS admin-ubuntu20.04-base
+ARG DEBIAN_FRONTEND
+ARG COMMON_DEPENDENCIES
+# ARG CUDA_RUNTIME_PACKAGE="libcudnn8=8.*.*.*-1+cuda11.7"  # Uncomment here if you want to install CUDA runtime packages on base image
+ARG CUDA_RUNTIME_PACKAGE=
+ARG DEPENDENCIES="${COMMON_DEPENDENCIES} ${CUDA_RUNTIME_PACKAGE}"
+RUN apt-get update -y && apt-get install -y software-properties-common && apt update && \
+    add-apt-repository ppa:deadsnakes/ppa && \
+    apt-get install -y python3.8 python3-pip python3.8-distutils python3.8-dev python3-tk python3.8-tk && \
+    python3.8 -m pip install --no-cache-dir --upgrade pip setuptools
+LABEL BaseImage=nvcr.io/nvidia/cuda:11.7.1-base-ubuntu20.04
+
+FROM ubuntu:20.04 AS admin-ubuntu20.04-no-cuda-base
+ARG DEBIAN_FRONTEND
+ARG COMMON_DEPENDENCIES
+ARG CUDA_RUNTIME_PACKAGE=
+ARG DEPENDENCIES="${COMMON_DEPENDENCIES} ${CUDA_RUNTIME_PACKAGE}"
+RUN apt-get update -y && apt-get install -y software-properties-common && apt update && \
+    add-apt-repository ppa:deadsnakes/ppa && \
+    apt-get install -y python3.8 python3-pip python3.8-distutils python3.8-dev python3-tk python3.8-tk && \
+    python3.8 -m pip install --no-cache-dir --upgrade pip setuptools
+RUN apt-get update -y
+LABEL BaseImage=ubuntu:20.04
+
+FROM nvcr.io/nvidia/cuda:11.7.1-base-ubuntu22.04 AS admin-ubuntu22.04-base
+ARG DEBIAN_FRONTEND
+ARG COMMON_DEPENDENCIES
+# ARG CUDA_RUNTIME_PACKAGE="libcudnn8=8.*.*.*-1+cuda12.2"  # Uncomment here if you want to install CUDA runtime packages
+ARG CUDA_RUNTIME_PACKAGE=
+ARG DEPENDENCIES="${COMMON_DEPENDENCIES} ${CUDA_RUNTIME_PACKAGE}"
+RUN apt-get update -y && apt-get install -y software-properties-common && apt update && \
+    add-apt-repository ppa:deadsnakes/ppa && \
+    apt-get install -y python3.8 python3-pip python3.8-distutils python3.8-dev python3-tk python3.8-tk && \
+    python3.8 -m pip install --no-cache-dir --upgrade pip setuptools
+LABEL BaseImage=nvcr.io/nvidia/cuda:11.7.1-base-ubuntu22.04
+
+FROM ubuntu:22.04 AS admin-ubuntu22.04-no-cuda-base
+ARG DEBIAN_FRONTEND
+ARG COMMON_DEPENDENCIES
+ARG CUDA_RUNTIME_PACKAGE=
+ARG DEPENDENCIES="${COMMON_DEPENDENCIES} ${CUDA_RUNTIME_PACKAGE}"
+RUN apt-get update -y && apt-get install -y software-properties-common && apt update && \
+    add-apt-repository ppa:deadsnakes/ppa && \
+    apt-get install -y python3.8 python3-pip python3.8-distutils python3.8-dev python3-tk python3.8-tk && \
+    python3.8 -m pip install --no-cache-dir --upgrade pip setuptools
+RUN apt-get update -y
+LABEL BaseImage=ubuntu:22.04
+
+### Build new base image
+FROM ${distribution}-base
+ARG DEBIAN_FRONTEND=noninteractive apt-get --fix-broken -y install
+ARG DEPENDENCIES
+RUN update-alternatives --install /usr/bin/python python /usr/bin/python3.8 10
+RUN python --version
+RUN apt-get update -y 
+RUN apt-get autoremove -y && apt-get clean -y && \
+    apt-get install -y software-properties-common && add-apt-repository universe
+
+RUN apt-get install -y ${DEPENDENCIES}
+RUN apt-get install -y python3-tk
+
+# Add a default user group.
+# Do it from early stage so that new group create from extra package installation will not occupy grpid
+ARG regular_username
+ARG regular_user_uid
+ARG regular_user_gid
+RUN groupadd --gid $regular_user_uid admin
+RUN useradd -s /usr/bin/bash --uid $regular_user_uid --gid $regular_user_gid -m $regular_username
+RUN if getent group input; then \
+      usermod -aG input $regular_username; \
+    fi
+RUN usermod -aG sudo,dialout,video,tty,audio,plugdev $regular_username
+
+RUN chown $regular_username:$regular_username /home/$regular_username
+
+# Allowing normal user can access gamepad and also sync the time system
+RUN cp /etc/group /etc/group.bak && \
+    sed -i 's/systemd-timesync:x:101:/systemd-timesync:x:106:/g' /etc/group && \
+    sed -i 's/input:x:106:admin/input:x:101:admin/g' /etc/group
+
+# Add user into ZED group if it exists
+RUN if [ $(getent group zed) ]; then usermod -aG zed $USERNAME; fi
+
+RUN echo "$regular_username:$regular_username" | chpasswd
+RUN apt autoremove -y && apt clean -y
+
+CMD ["bash"]

@@ -1,0 +1,80 @@
+ARG base_image=""
+ARG username=admin
+ARG DEBIAN_FRONTEND=noninteractive
+ARG INSTALL_CUSTOM_CUDA=0
+ARG CUSTOM_CUDA_PACKAGE=
+
+FROM ${base_image}
+ARG DEBIAN_FRONTEND
+ARG username
+## install custom version for cuda, cudnn
+
+ARG INSTALL_CUSTOM_CUDA
+ARG CUSTOM_CUDA_PACKAGE
+RUN if [ $INSTALL_CUSTOM_CUDA = 1 ]; then \
+        echo "Installing CUDA packages: ${CUSTOM_CUDA_PACKAGE}" ; \
+        apt-get install -y ${CUSTOM_CUDA_PACKAGE} ; \
+    else \
+        echo "Does not install CUDA"; \
+    fi
+
+## install extended packages
+COPY setup /opt/setup/
+WORKDIR /opt/setup
+RUN chmod -R 777 /opt/setup
+RUN echo "Current working directory is: $PWD"
+
+RUN apt-get update
+RUN apt-get install libasound-dev libportaudio2 libportaudiocpp0 portaudio19-dev -y
+RUN pip install pyaudio
+RUN if [ -n "setup.sh" ]; then \
+        ./setup.sh ;\
+    fi
+
+RUN apt autoremove -y && apt clean -y
+# switch to USER to install packages, python libs to the user directory
+USER $username
+RUN echo "Switch to user: $(whoami)"
+# Install packages no require access to root
+RUN if [ -n "setup-user.sh" ]; then \
+        ./setup-user.sh ;\
+    fi
+
+# Install python packages in order
+RUN if [ -n "requirements-first.txt" ]; then \
+        while IFS= read -r package || [ -n "$package" ] ; do \
+            case "$package" in \
+                '#'*|'') continue ;; \
+                *) python3.8 -m pip install --default-timeout=100 "$package" ;; \
+esac \
+        done < requirements-first.txt; \
+    fi
+
+# Install python packages, the installation auto check the dependencies and install do not follow order
+RUN if [ -n "requirements.txt" ]; then \
+        python3.8 -m pip install --default-timeout=100 -r requirements.txt; \
+    fi
+
+# Install python packages in order
+RUN if [ -n "requirements-last.txt" ]; then \
+        # cat requirements-order.txt | xargs -L 1 python -m pip install ;\
+        while IFS= read -r package || [ -n "$package" ]; do \
+            case "$package" in \
+                '#'*|'') continue ;; \
+                *) python3.8 -m pip install --default-timeout=100 "$package" ;; \
+esac \
+        done < requirements-last.txt; \
+    fi
+
+ENV PATH=$PATH:~/.local/bin
+
+USER root
+
+COPY default_admin_entrypoint.sh /
+RUN chmod -R 777 /default_admin_entrypoint.sh
+RUN mkdir -p /home/admin
+
+WORKDIR /home/admin
+ENTRYPOINT ["/default_admin_entrypoint.sh"]
+
+CMD ["bash"]
